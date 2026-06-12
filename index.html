@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ultimate Audio Studio • Чайтанья</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: #0a0f1a;
+            color: white;
+            font-family: system-ui, 'Segoe UI', monospace;
+            margin: 0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(12px);
+            border-radius: 2rem;
+            padding: 1.5rem;
+            border: 1px solid #ff6600;
+        }
+        h1, h2 { margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 10px; }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .flex-row input, .flex-row button {
+            padding: 8px 16px;
+            border-radius: 60px;
+            border: none;
+            background: #2a2a3a;
+            color: white;
+            font-weight: bold;
+        }
+        .flex-row button { background: #ff6600; cursor: pointer; transition: 0.2s; }
+        .flex-row button:hover { background: #ff8833; }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: 1.5rem;
+            padding: 1rem;
+        }
+        .playlist {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .playlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1e1e2a;
+            margin: 5px 0;
+            padding: 6px 12px;
+            border-radius: 40px;
+        }
+        .playlist-item button {
+            background: #ff4444;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+        .eq-sliders {
+            display: flex;
+            gap: 8px;
+            justify-content: space-between;
+            margin: 15px 0;
+        }
+        .eq-band {
+            text-align: center;
+            font-size: 10px;
+            flex: 1;
+        }
+        .eq-band input { width: 100%; writing-mode: bt-lr; }
+        .progress-area { background: #1e1e2a; border-radius: 60px; margin: 10px 0; height: 30px; overflow: hidden; }
+        .progress-bar { width: 0%; height: 100%; background: #ff6600; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+        canvas#viz2d { width: 100%; height: 200px; background: #0a0a1a; border-radius: 1rem; }
+        #viz3d { width: 100%; height: 300px; background: #0a0a1a; border-radius: 1rem; display: none; }
+        @media (max-width: 800px) { .main-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎧 Ultimate Audio Studio</h1>
+    <div class="flex-row">
+        <input type="text" id="urlInput" placeholder="Прямая ссылка на MP3 (https://... .mp3)">
+        <button id="loadUrlBtn">➕ Загрузить по ссылке</button>
+        <input type="file" id="localFile" accept="audio/*">
+        <button id="addToPlaylistBtn">📋 Добавить в плейлист</button>
+    </div>
+    <div class="main-grid">
+        <!-- Левая колонка: плейлист и управление -->
+        <div class="panel">
+            <h2>📝 Плейлист</h2>
+            <div class="playlist" id="playlistContainer"></div>
+            <div class="flex-row" style="margin-top: 10px;">
+                <button id="exportPlaylistBtn">💾 Сохранить плейлист</button>
+                <button id="importPlaylistBtn">📂 Загрузить плейлист</button>
+                <button id="clearPlaylistBtn">🗑 Очистить</button>
+            </div>
+        </div>
+        <!-- Правая колонка: эквалайзер и эффекты -->
+        <div class="panel">
+            <h2>🎛 Эквалайзер (10 полос)</h2>
+            <div class="eq-sliders" id="eqSliders"></div>
+            <div class="flex-row">
+                <button id="exportEqBtn">💾 Сохранить настройки EQ</button>
+                <button id="importEqBtn">📂 Загрузить настройки EQ</button>
+                <button id="resetEqBtn">🔄 Сбросить EQ</button>
+            </div>
+            <h2>🎚 Эффекты</h2>
+            <div class="flex-row">
+                <label>🔊 Громкость <input type="range" id="volume" min="0" max="1.5" step="0.01" value="0.8"></label>
+                <label>🎛 Бас <input type="range" id="bass" min="-30" max="20" value="0" step="1"></label>
+                <label>🎚 ВЧ <input type="range" id="treble" min="-30" max="20" value="0" step="1"></label>
+                <label>🌀 Реверберация <input type="range" id="reverb" min="0" max="1" step="0.01" value="0"></label>
+            </div>
+            <div class="flex-row">
+                <button id="exportEffectsBtn">💾 Сохранить эффекты</button>
+                <button id="importEffectsBtn">📂 Загрузить эффекты</button>
+            </div>
+        </div>
+    </div>
+    <!-- Прогресс -->
+    <div class="progress-area" id="progressArea" style="display: none;">
+        <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+    <!-- Визуализация -->
+    <div class="flex-row">
+        <button id="playBtn">▶ Воспроизвести</button>
+        <button id="pauseBtn">⏸ Пауза</button>
+        <button id="toggleVizBtn">🔄 2D / 3D</button>
+    </div>
+    <div>
+        <canvas id="viz2d" width="800" height="200"></canvas>
+        <div id="viz3d"></div>
+    </div>
+    <div class="flex-row" style="justify-content: center;">
+        <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
+    </div>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js" } }
+</script>
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- DOM элементы ---
+    const urlInput = document.getElementById('urlInput');
+    const loadUrlBtn = document.getElementById('loadUrlBtn');
+    const localFileInput = document.getElementById('localFile');
+    const addToPlaylistBtn = document.getElementById('addToPlaylistBtn');
+    const playlistContainer = document.getElementById('playlistContainer');
+    const exportPlaylistBtn = document.getElementById('exportPlaylistBtn');
+    const importPlaylistBtn = document.getElementById('importPlaylistBtn');
+    const clearPlaylistBtn = document.getElementById('clearPlaylistBtn');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const toggleVizBtn = document.getElementById('toggleVizBtn');
+    const volumeSlider = document.getElementById('volume');
+    const bassSlider = document.getElementById('bass');
+    const trebleSlider = document.getElementById('treble');
+    const reverbSlider = document.getElementById('reverb');
+    const currentTimeSpan = document.getElementById('currentTime');
+    const durationSpan = document.getElementById('duration');
+    const progressArea = document.getElementById('progressArea');
+    const progressBar = document.getElementById('progressBar');
+    const canvas2d = document.getElementById('viz2d');
+    const viz3dDiv = document.getElementById('viz3d');
+
+    // --- Эквалайзер (10 полос) ---
+    const eqFrequencies = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    let eqGains = new Array(10).fill(0);
+    let eqFilters = [];
+
+    function initEqFilters(ctx) {
+        eqFilters = [];
+        for (let i = 0; i < eqFrequencies.length; i++) {
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'peaking';
+            filter.frequency.value = eqFrequencies[i];
+            filter.Q.value = 1;
+            filter.gain.value = eqGains[i];
+            eqFilters.push(filter);
+        }
+        // соединяем последовательно
+        for (let i = 0; i < eqFilters.length - 1; i++) {
+            eqFilters[i].connect(eqFilters[i+1]);
+        }
+        return eqFilters;
+    }
+
+    function updateEqGains() {
+        if (!eqFilters.length) return;
+        for (let i = 0; i < eqFilters.length; i++) {
+            eqFilters[i].gain.value = eqGains[i];
+        }
+    }
+
+    // --- Web Audio ---
+    let audioContext = null;
+    let source = null;
+    let audioBuffer = null;
+    let isPlaying = false;
+    let startTime = 0;
+    let pauseOffset = 0;
+    let gainNode = null;
+    let bassFilter = null;
+    let trebleFilter = null;
+    let reverbConvolver = null;
+    let analyser = null;
+    let masterGain = null; // после всех эффектов
+
+    function initAudioContext() {
+        if (audioContext) return;
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Создаём узлы
+        bassFilter = audioContext.createBiquadFilter();
+        bassFilter.type = 'lowshelf';
+        bassFilter.frequency.value = 200;
+        trebleFilter = audioContext.createBiquadFilter();
+        trebleFilter.type = 'highshelf';
+        trebleFilter.frequency.value = 4000;
+        reverbConvolver = audioContext.createConvolver();
+        gainNode = audioContext.createGain();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = 1;
+
+        // Путь: source -> eqFilters[] -> bassFilter -> trebleFilter -> reverbConvolver -> gainNode -> analyser -> masterGain -> destination
+        const eqChain = initEqFilters(audioContext);
+        const firstEq = eqChain[0];
+        const lastEq = eqChain[eqChain.length-1];
+        // При подключении источника будем соединять с firstEq
+        // Пока соединим константную цепочку:
+        if (eqChain.length) {
+            lastEq.connect(bassFilter);
+        } else {
+            // если нет полос EQ (не бывает), то просто заглушка
+        }
+        bassFilter.connect(trebleFilter);
+        trebleFilter.connect(reverbConvolver);
+        reverbConvolver.connect(gainNode);
+        gainNode.connect(analyser);
+        analyser.connect(masterGain);
+        masterGain.connect(audioContext.destination);
+
+        updateEffects();
+        updateEqGains();
+    }
+
+    function updateEffects() {
+        if (!gainNode) return;
+        gainNode.gain.value = parseFloat(volumeSlider.value);
+        bassFilter.gain.value = parseFloat(bassSlider.value);
+        trebleFilter.gain.value = parseFloat(trebleSlider.value);
+        const reverbAmount = parseFloat(reverbSlider.value);
+        if (reverbAmount > 0 && audioContext) {
+            const sampleRate = audioContext.sampleRate;
+            const length = sampleRate * 2.5;
+            const impulse = audioContext.createBuffer(2, length, sampleRate);
+            for (let ch = 0; ch < 2; ch++) {
+                const data = impulse.getChannelData(ch);
+                for (let i = 0; i < length; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (length * 0.2)) * reverbAmount;
+                }
+            }
+            reverbConvolver.buffer = impulse;
+        } else {
+            reverbConvolver.buffer = null;
+        }
+    }
+
+    volumeSlider.addEventListener('input', updateEffects);
+    bassSlider.addEventListener('input', updateEffects);
+    trebleSlider.addEventListener('input', updateEffects);
+    reverbSlider.addEventListener('input', updateEffects);
+
+    // --- Эквалайзер UI ---
+    const eqSlidersDiv = document.getElementById('eqSliders');
+    function buildEqUI() {
+        eqSlidersDiv.innerHTML = '';
+        eqFrequencies.forEach((freq, idx) => {
+            const band = document.createElement('div');
+            band.className = 'eq-band';
+            band.innerHTML = `
+                <div>${freq} Hz</div>
+                <input type="range" min="-20" max="20" step="1" value="0" data-idx="${idx}">
+                <span>0 dB</span>
+            `;
+            const slider = band.querySelector('input');
+            const span = band.querySelector('span');
+            slider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                span.innerText = `${val} dB`;
+                eqGains[idx] = val;
+                updateEqGains();
+            });
+            eqSlidersDiv.appendChild(band);
+        });
+    }
+    buildEqUI();
+
+    // --- Плейлист (массив объектов { name, url }) ---
+    let playlist = [];
+    let currentTrackUrl = null;
+
+    function renderPlaylist() {
+        playlistContainer.innerHTML = '';
+        playlist.forEach((track, idx) => {
+            const div = document.createElement('div');
+            div.className = 'playlist-item';
+            div.innerHTML = `
+                <span>${track.name}</span>
+                <div>
+                    <button class="play-track" data-idx="${idx}">▶</button>
+                    <button class="remove-track" data-idx="${idx}">✖</button>
+                </div>
+            `;
+            div.querySelector('.play-track').addEventListener('click', () => playTrackFromPlaylist(idx));
+            div.querySelector('.remove-track').addEventListener('click', () => {
+                playlist.splice(idx, 1);
+                renderPlaylist();
+            });
+            playlistContainer.appendChild(div);
+        });
+    }
+
+    function addToPlaylist(name, url) {
+        playlist.push({ name, url });
+        renderPlaylist();
+    }
+
+    async function playTrackFromPlaylist(idx) {
+        const track = playlist[idx];
+        if (!track) return;
+        await loadAndPlay(track.url, track.name);
+    }
+
+    async function loadAndPlay(url, displayName) {
+        if (!audioContext) initAudioContext();
+        if (source) {
+            try { source.stop(); } catch(e) {}
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+        }
+        // Показать прогресс (если нужно)
+        progressArea.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Network error');
+            const contentLength = response.headers.get('content-length');
+            const total = contentLength ? parseInt(contentLength) : 0;
+            let loaded = 0;
+            const reader = response.body.getReader();
+            const chunks = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loaded += value.length;
+                if (total) {
+                    const percent = Math.round((loaded / total) * 100);
+                    progressBar.style.width = `${percent}%`;
+                    progressBar.textContent = `${percent}%`;
+                }
+            }
+            const arrayBuffer = await new Blob(chunks).arrayBuffer();
+            audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            progressArea.style.display = 'none';
+            pauseOffset = 0;
+            updateDuration();
+            startPlayback();
+        } catch (err) {
+            progressArea.style.display = 'none';
+            alert('Ошибка загрузки: ' + err.message);
+        }
+    }
+
+    function startPlayback() {
+        if (!audioBuffer || !audioContext) return;
+        if (source) {
+            try { source.stop(); } catch(e) {}
+        }
+        source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        // Подключаем к цепочке эквалайзера
+        const firstEq = eqFilters[0];
+        if (firstEq) {
+            source.connect(firstEq);
+        } else {
+            source.connect(bassFilter);
+        }
+        source.start(0, pauseOffset);
+        isPlaying = true;
+        startTime = audioContext.currentTime;
+        updateCurrentTimeLoop();
+        startVisualization();
+        if (audioContext.state === 'suspended') audioContext.resume();
+    }
+
+    function pausePlayback() {
+        if (!isPlaying || !source) return;
+        pauseOffset += audioContext.currentTime - startTime;
+        source.stop();
+        source.disconnect();
+        isPlaying = false;
+        cancelAnimationFrame(animationId);
+    }
+
+    function updateDuration() {
+        if (audioBuffer) {
+            const dur = audioBuffer.duration;
+            const mins = Math.floor(dur / 60);
+            const secs = Math.floor(dur % 60);
+            durationSpan.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+        }
+    }
+
+    function updateCurrentTimeLoop() {
+        if (!isPlaying) return;
+        const elapsed = pauseOffset + (audioContext.currentTime - startTime);
+        const t = Math.min(elapsed, audioBuffer.duration);
+        const mins = Math.floor(t / 60);
+        const secs = Math.floor(t % 60);
+        currentTimeSpan.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+        requestAnimationFrame(updateCurrentTimeLoop);
+    }
+
+    playBtn.addEventListener('click', () => {
+        if (!audioBuffer) { alert('Сначала добавьте трек в плейлист и выберите его'); return; }
+        if (isPlaying) return;
+        if (audioContext.state === 'suspended') audioContext.resume().then(() => startPlayback());
+        else startPlayback();
+    });
+    pauseBtn.addEventListener('click', () => { if (isPlaying) pausePlayback(); });
+
+    // --- Загрузка по ссылке и добавление в плейлист ---
+    loadUrlBtn.addEventListener('click', async () => {
+        let url = urlInput.value.trim();
+        if (!url) return;
+        let name = url.split('/').pop() || 'audio';
+        addToPlaylist(name, url);
+        urlInput.value = '';
+    });
+
+    addToPlaylistBtn.addEventListener('click', () => {
+        const files = localFileInput.files;
+        if (files.length === 0) { alert('Выберите локальный файл'); return; }
+        const file = files[0];
+        const url = URL.createObjectURL(file);
+        addToPlaylist(file.name, url);
+        localFileInput.value = '';
+    });
+
+    // Экспорт / импорт плейлиста
+    exportPlaylistBtn.addEventListener('click', () => {
+        const data = JSON.stringify(playlist, null, 2);
+        const blob = new Blob([data], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'playlist.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+
+    importPlaylistBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (Array.isArray(data)) {
+                        playlist = data;
+                        renderPlaylist();
+                    } else throw new Error();
+                } catch(err) { alert('Неверный формат плейлиста'); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    });
+    clearPlaylistBtn.addEventListener('click', () => { playlist = []; renderPlaylist(); });
+
+    // Экспорт/импорт EQ
+    exportEqBtn.addEventListener('click', () => {
+        const eqData = { frequencies: eqFrequencies, gains: eqGains };
+        const blob = new Blob([JSON.stringify(eqData, null, 2)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'eq_preset.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+    importEqBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (data.gains && data.gains.length === eqGains.length) {
+                        eqGains = data.gains;
+                        for (let i = 0; i < eqSlidersDiv.children.length; i++) {
+                            const slider = eqSlidersDiv.children[i].querySelector('input');
+                            const span = eqSlidersDiv.children[i].querySelector('span');
+                            slider.value = eqGains[i];
+                            span.innerText = `${eqGains[i]} dB`;
+                        }
+                        updateEqGains();
+                    } else throw new Error();
+                } catch(err) { alert('Ошибка импорта EQ'); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    });
+    resetEqBtn.addEventListener('click', () => {
+        eqGains.fill(0);
+        for (let i = 0; i < eqSlidersDiv.children.length; i++) {
+            const slider = eqSlidersDiv.children[i].querySelector('input');
+            const span = eqSlidersDiv.children[i].querySelector('span');
+            slider.value = 0;
+            span.innerText = '0 dB';
+        }
+        updateEqGains();
+    });
+
+    // Экспорт/импорт эффектов (громкость, бас, вч, реверб)
+    exportEffectsBtn.addEventListener('click', () => {
+        const effects = {
+            volume: volumeSlider.value,
+            bass: bassSlider.value,
+            treble: trebleSlider.value,
+            reverb: reverbSlider.value
+        };
+        const blob = new Blob([JSON.stringify(effects, null, 2)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'effects_preset.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+    importEffectsBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (data.volume !== undefined) volumeSlider.value = data.volume;
+                    if (data.bass !== undefined) bassSlider.value = data.bass;
+                    if (data.treble !== undefined) trebleSlider.value = data.treble;
+                    if (data.reverb !== undefined) reverbSlider.value = data.reverb;
+                    updateEffects();
+                } catch(err) { alert('Ошибка импорта эффектов'); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    });
+
+    // --- Визуализация 2D/3D (как раньше) ---
+    let vizMode = '2d';
+    let animationId = null;
+    let scene3d, camera3d, renderer3d, sphereMesh, cubes = [];
+
+    function startVisualization() {
+        if (animationId) cancelAnimationFrame(animationId);
+        if (!analyser) return;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const ctx = canvas2d.getContext('2d');
+        function draw2d() {
+            if (!isPlaying || vizMode !== '2d') {
+                if (vizMode !== '2d') return;
+                ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+                animationId = requestAnimationFrame(draw2d);
+                return;
+            }
+            analyser.getByteFrequencyData(dataArray);
+            ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+            const barWidth = canvas2d.width / bufferLength;
+            let x = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = dataArray[i] / 255 * canvas2d.height;
+                ctx.fillStyle = `hsl(${i / bufferLength * 360}, 100%, 55%)`;
+                ctx.fillRect(x, canvas2d.height - barHeight, barWidth - 1, barHeight);
+                x += barWidth;
+            }
+            animationId = requestAnimationFrame(draw2d);
+        }
+        draw2d();
+    }
+
+    function init3D() {
+        if (renderer3d) return;
+        const width = viz3dDiv.clientWidth;
+        const height = 300;
+        scene3d = new THREE.Scene();
+        scene3d.background = new THREE.Color(0x0a0a1a);
+        camera3d = new THREE.PerspectiveCamera(45, width/height, 0.1, 1000);
+        camera3d.position.set(0, 2, 8);
+        renderer3d = new THREE.WebGLRenderer({ antialias: true });
+        renderer3d.setSize(width, height);
+        viz3dDiv.appendChild(renderer3d.domElement);
+        const geometry = new THREE.SphereGeometry(1.2, 64, 64);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0x442200 });
+        sphereMesh = new THREE.Mesh(geometry, material);
+        scene3d.add(sphereMesh);
+        const cubeGroup = new THREE.Group();
+        cubes = [];
+        for (let i = 0; i < 32; i++) {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), new THREE.MeshStandardMaterial({ color: 0xffaa66 }));
+            box.position.x = (i - 16) * 0.25;
+            box.position.y = -1;
+            cubeGroup.add(box);
+            cubes.push(box);
+        }
+        scene3d.add(cubeGroup);
+        const light = new THREE.PointLight(0xffffff, 1);
+        light.position.set(2, 5, 3);
+        scene3d.add(light);
+        const ambient = new THREE.AmbientLight(0x404060);
+        scene3d.add(ambient);
+        function animate3D() {
+            if (vizMode !== '3d') {
+                if (renderer3d) renderer3d.render(scene3d, camera3d);
+                requestAnimationFrame(animate3D);
+                return;
+            }
+            if (analyser && isPlaying) {
+                const freq = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(freq);
+                const avg = freq.reduce((a,b)=>a+b,0)/freq.length;
+                const scale = 1 + avg / 255 * 0.8;
+                sphereMesh.scale.set(scale, scale, scale);
+                cubes.forEach((cube, idx) => {
+                    const val = freq[idx % freq.length] / 255;
+                    cube.scale.y = 0.2 + val * 1.2;
+                    cube.position.y = -0.8 + cube.scale.y / 2;
+                });
+            }
+            sphereMesh.rotation.y += 0.01;
+            renderer3d.render(scene3d, camera3d);
+            requestAnimationFrame(animate3D);
+        }
+        animate3D();
+        window.addEventListener('resize', () => {
+            if (renderer3d) {
+                const w = viz3dDiv.clientWidth;
+                const h = 300;
+                renderer3d.setSize(w, h);
+                camera3d.aspect = w/h;
+                camera3d.updateProjectionMatrix();
+            }
+        });
+    }
+
+    toggleVizBtn.addEventListener('click', () => {
+        if (vizMode === '2d') {
+            vizMode = '3d';
+            canvas2d.style.display = 'none';
+            viz3dDiv.style.display = 'block';
+            init3D();
+            if (animationId) cancelAnimationFrame(animationId);
+        } else {
+            vizMode = '2d';
+            canvas2d.style.display = 'block';
+            viz3dDiv.style.display = 'none';
+            startVisualization();
+        }
+    });
+    canvas2d.style.display = 'block';
+    viz3dDiv.style.display = 'none';
+    window.addEventListener('resize', () => {
+        canvas2d.width = canvas2d.parentElement.clientWidth;
+        canvas2d.height = 200;
+    });
+    canvas2d.width = canvas2d.parentElement.clientWidth;
+    canvas2d.height = 200;
+</script>
+</body>
+  </html>
