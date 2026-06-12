@@ -100,7 +100,6 @@
         <button id="addToPlaylistBtn">📋 Добавить в плейлист</button>
     </div>
     <div class="main-grid">
-        <!-- Левая колонка: плейлист и управление -->
         <div class="panel">
             <h2>📝 Плейлист</h2>
             <div class="playlist" id="playlistContainer"></div>
@@ -110,7 +109,6 @@
                 <button id="clearPlaylistBtn">🗑 Очистить</button>
             </div>
         </div>
-        <!-- Правая колонка: эквалайзер и эффекты -->
         <div class="panel">
             <h2>🎛 Эквалайзер (10 полос)</h2>
             <div class="eq-sliders" id="eqSliders"></div>
@@ -132,11 +130,9 @@
             </div>
         </div>
     </div>
-    <!-- Прогресс -->
     <div class="progress-area" id="progressArea" style="display: none;">
         <div class="progress-bar" id="progressBar">0%</div>
     </div>
-    <!-- Визуализация -->
     <div class="flex-row">
         <button id="playBtn">▶ Воспроизвести</button>
         <button id="pauseBtn">⏸ Пауза</button>
@@ -195,7 +191,6 @@
             filter.gain.value = eqGains[i];
             eqFilters.push(filter);
         }
-        // соединяем последовательно
         for (let i = 0; i < eqFilters.length - 1; i++) {
             eqFilters[i].connect(eqFilters[i+1]);
         }
@@ -221,12 +216,11 @@
     let trebleFilter = null;
     let reverbConvolver = null;
     let analyser = null;
-    let masterGain = null; // после всех эффектов
+    let masterGain = null;
 
     function initAudioContext() {
         if (audioContext) return;
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        // Создаём узлы
         bassFilter = audioContext.createBiquadFilter();
         bassFilter.type = 'lowshelf';
         bassFilter.frequency.value = 200;
@@ -240,16 +234,11 @@
         masterGain = audioContext.createGain();
         masterGain.gain.value = 1;
 
-        // Путь: source -> eqFilters[] -> bassFilter -> trebleFilter -> reverbConvolver -> gainNode -> analyser -> masterGain -> destination
         const eqChain = initEqFilters(audioContext);
         const firstEq = eqChain[0];
         const lastEq = eqChain[eqChain.length-1];
-        // При подключении источника будем соединять с firstEq
-        // Пока соединим константную цепочку:
         if (eqChain.length) {
             lastEq.connect(bassFilter);
-        } else {
-            // если нет полос EQ (не бывает), то просто заглушка
         }
         bassFilter.connect(trebleFilter);
         trebleFilter.connect(reverbConvolver);
@@ -268,7 +257,7 @@
         bassFilter.gain.value = parseFloat(bassSlider.value);
         trebleFilter.gain.value = parseFloat(trebleSlider.value);
         const reverbAmount = parseFloat(reverbSlider.value);
-        if (reverbAmount > 0 && audioContext) {
+        if (reverbAmount > 0.01 && audioContext) {
             const sampleRate = audioContext.sampleRate;
             const length = sampleRate * 2.5;
             const impulse = audioContext.createBuffer(2, length, sampleRate);
@@ -280,7 +269,7 @@
             }
             reverbConvolver.buffer = impulse;
         } else {
-            reverbConvolver.buffer = null;
+            reverbConvolver.buffer = null;   // полное отключение реверберации
         }
     }
 
@@ -314,9 +303,8 @@
     }
     buildEqUI();
 
-    // --- Плейлист (массив объектов { name, url }) ---
+    // --- Плейлист ---
     let playlist = [];
-    let currentTrackUrl = null;
 
     function renderPlaylist() {
         playlistContainer.innerHTML = '';
@@ -357,7 +345,6 @@
             isPlaying = false;
             cancelAnimationFrame(animationId);
         }
-        // Показать прогресс (если нужно)
         progressArea.style.display = 'block';
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
@@ -399,7 +386,6 @@
         }
         source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
-        // Подключаем к цепочке эквалайзера
         const firstEq = eqFilters[0];
         if (firstEq) {
             source.connect(firstEq);
@@ -450,7 +436,6 @@
     });
     pauseBtn.addEventListener('click', () => { if (isPlaying) pausePlayback(); });
 
-    // --- Загрузка по ссылке и добавление в плейлист ---
     loadUrlBtn.addEventListener('click', async () => {
         let url = urlInput.value.trim();
         if (!url) return;
@@ -468,7 +453,6 @@
         localFileInput.value = '';
     });
 
-    // Экспорт / импорт плейлиста
     exportPlaylistBtn.addEventListener('click', () => {
         const data = JSON.stringify(playlist, null, 2);
         const blob = new Blob([data], {type: 'application/json'});
@@ -502,7 +486,6 @@
     });
     clearPlaylistBtn.addEventListener('click', () => { playlist = []; renderPlaylist(); });
 
-    // Экспорт/импорт EQ
     exportEqBtn.addEventListener('click', () => {
         const eqData = { frequencies: eqFrequencies, gains: eqGains };
         const blob = new Blob([JSON.stringify(eqData, null, 2)], {type: 'application/json'});
@@ -549,7 +532,6 @@
         updateEqGains();
     });
 
-    // Экспорт/импорт эффектов (громкость, бас, вч, реверб)
     exportEffectsBtn.addEventListener('click', () => {
         const effects = {
             volume: volumeSlider.value,
@@ -586,7 +568,7 @@
         input.click();
     });
 
-    // --- Визуализация 2D/3D (как раньше) ---
+    // --- Визуализация 2D/3D ---
     let vizMode = '2d';
     let animationId = null;
     let scene3d, camera3d, renderer3d, sphereMesh, cubes = [];
@@ -707,4 +689,4 @@
     canvas2d.height = 200;
 </script>
 </body>
-  </html>
+    </html>
