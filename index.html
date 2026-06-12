@@ -217,6 +217,9 @@
     let reverbConvolver = null;
     let analyser = null;
     let masterGain = null;
+    // Новые узлы для dry/wet смешивания
+    let dryGain = null;
+    let wetGain = null;
 
     function initAudioContext() {
         if (audioContext) return;
@@ -234,6 +237,13 @@
         masterGain = audioContext.createGain();
         masterGain.gain.value = 1;
 
+        // Сухой и мокрый узлы
+        dryGain = audioContext.createGain();
+        wetGain = audioContext.createGain();
+        dryGain.gain.value = 1;
+        wetGain.gain.value = 0;
+
+        // Цепочка эквалайзера
         const eqChain = initEqFilters(audioContext);
         const firstEq = eqChain[0];
         const lastEq = eqChain[eqChain.length-1];
@@ -241,8 +251,15 @@
             lastEq.connect(bassFilter);
         }
         bassFilter.connect(trebleFilter);
+
+        // Параллельные пути: сухой и через ревербератор
+        trebleFilter.connect(dryGain);
         trebleFilter.connect(reverbConvolver);
-        reverbConvolver.connect(gainNode);
+        reverbConvolver.connect(wetGain);
+
+        // Смешивание и общая громкость
+        dryGain.connect(gainNode);
+        wetGain.connect(gainNode);
         gainNode.connect(analyser);
         analyser.connect(masterGain);
         masterGain.connect(audioContext.destination);
@@ -253,23 +270,31 @@
 
     function updateEffects() {
         if (!gainNode) return;
+        // Общая громкость, бас, высокие
         gainNode.gain.value = parseFloat(volumeSlider.value);
         bassFilter.gain.value = parseFloat(bassSlider.value);
         trebleFilter.gain.value = parseFloat(trebleSlider.value);
+        
         const reverbAmount = parseFloat(reverbSlider.value);
+        if (!wetGain) return;
+        
         if (reverbAmount > 0.01 && audioContext) {
+            // Создаём импульс с фиксированной амплитудой (не зависящей от reverbAmount)
             const sampleRate = audioContext.sampleRate;
             const length = sampleRate * 2.5;
             const impulse = audioContext.createBuffer(2, length, sampleRate);
             for (let ch = 0; ch < 2; ch++) {
                 const data = impulse.getChannelData(ch);
                 for (let i = 0; i < length; i++) {
-                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (length * 0.2)) * reverbAmount;
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (length * 0.2));
                 }
             }
             reverbConvolver.buffer = impulse;
+            wetGain.gain.value = Math.min(1, reverbAmount);
         } else {
-            reverbConvolver.buffer = null;   // полное отключение реверберации
+            // При выключенной реверберации просто обнуляем мокрый сигнал, буфер не трогаем
+            wetGain.gain.value = 0;
+            // reverbConvolver.buffer = null; // больше не нужно
         }
     }
 
